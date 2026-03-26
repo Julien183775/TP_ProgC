@@ -2,7 +2,7 @@
 #include <string.h>
 #include "fichier.h"
 
-int main() {
+void exo4_2() {
     int choix;
     char nom_de_fichier[100];
     char message[200];
@@ -40,5 +40,5 @@ int main() {
         printf("Choix invalide.\n");
     }
 
-    return 0;
+    return;
 }
