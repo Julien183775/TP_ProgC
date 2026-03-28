@@ -27,13 +27,13 @@ int modulo(int a, int b) {
 }
 
 int et(int a, int b) {
-    return a && b;
+    return a & b;
 }
 
 int ou(int a, int b) {
-    return a || b;
+    return a | b;
 }
 
 int negation(int a) {
-    return !a;
+    return ~a;
 }
