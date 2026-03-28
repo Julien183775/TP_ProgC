@@ -53,8 +53,13 @@ int recois_envoie_message(int client_socket_fd, char *data)
 
     printf("Message reçu: %s\n", data);
     printf("Entrez une réponse : ");
-
-    fgets(reponse, sizeof(reponse), stdin);
+    fflush(stdout);
+   
+    if (fgets(reponse, sizeof(reponse), stdin) == NULL)
+    {
+        perror("Erreur de lecture clavier");
+        return EXIT_FAILURE;
+    }
 
     return renvoie_message(client_socket_fd, reponse);
 }
