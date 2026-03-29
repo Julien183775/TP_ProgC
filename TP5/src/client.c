@@ -16,6 +16,29 @@
 #include "client.h"
 
 /**
+ * Envoie une opération de calcul au serveur.
+ *
+ * Format :
+ * calcule : <operateur> <num1> <num2>
+ */
+int envoie_operateur_numeros(int socketfd, char operateur, int num1, int num2)
+{
+  char data[1024];
+
+  memset(data, 0, sizeof(data));
+  sprintf(data, "calcule : %c %d %d", operateur, num1, num2);
+
+  int write_status = write(socketfd, data, strlen(data));
+  if (write_status < 0)
+  {
+    perror("Erreur d'écriture");
+    return -1;
+  }
+
+  return 0;
+}
+
+/**
  * Fonction pour envoyer et recevoir un message depuis un client connecté à la socket.
  *
  * @param socketfd Le descripteur de la socket utilisée pour la communication.
@@ -24,31 +47,49 @@
 int envoie_recois_message(int socketfd)
 {
   char data[1024];
+  char message[1024];
+  char operateur;
+  int num1, num2;
 
-  // Réinitialisation de l'ensemble des données
+  // Réinitialisation
   memset(data, 0, sizeof(data));
 
-  // Demande à l'utilisateur d'entrer un message
-  char message[1024];
-  printf("Votre message (max 1000 caractères): ");
+  // Saisie utilisateur
+  printf("Votre message (ex: texte ou calcule : + 23 45): ");
   fgets(message, sizeof(message), stdin);
 
-  // Construit le message avec une étiquette "message: "
-  strcpy(data, "message: ");
-  strcat(data, message);
+  // Supprime le retour à la ligne
+  message[strcspn(message, "\n")] = '\0';
 
-  // Envoie le message au client
-  int write_status = write(socketfd, data, strlen(data));
-  if (write_status < 0)
+  /*
+   * Si le message correspond à une opération :
+   * calcule : + 23 45
+   */
+  if (sscanf(message, "calcule : %c %d %d", &operateur, &num1, &num2) == 3)
   {
-    perror("Erreur d'écriture");
-    return -1;
+    if (envoie_operateur_numeros(socketfd, operateur, num1, num2) < 0)
+    {
+      return -1;
+    }
+  }
+  else
+  {
+    // Message classique
+    strcpy(data, "message: ");
+    strcat(data, message);
+
+    int write_status = write(socketfd, data, strlen(data));
+    if (write_status < 0)
+    {
+      perror("Erreur d'écriture");
+      return -1;
+    }
   }
 
-  // Réinitialisation de l'ensemble des données
+  // Réinitialisation
   memset(data, 0, sizeof(data));
 
-  // Lit les données de la socket
+  // Réception réponse serveur
   int read_status = read(socketfd, data, sizeof(data));
   if (read_status < 0)
   {
@@ -56,20 +97,19 @@ int envoie_recois_message(int socketfd)
     return -1;
   }
 
-  // Affiche le message reçu du client
+  // Affichage
   printf("Message reçu: %s\n", data);
 
-  return 0; // Succès
+  return 0;
 }
 
 int main()
 {
   int socketfd;
-
   struct sockaddr_in server_addr;
 
   /*
-   * Creation d'une socket
+   * Création de la socket
    */
   socketfd = socket(AF_INET, SOCK_STREAM, 0);
   if (socketfd < 0)
@@ -78,13 +118,13 @@ int main()
     exit(EXIT_FAILURE);
   }
 
-  // détails du serveur (adresse et port)
+  // Configuration serveur
   memset(&server_addr, 0, sizeof(server_addr));
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons(PORT);
   server_addr.sin_addr.s_addr = INADDR_ANY;
 
-  // demande de connection au serveur
+  // Connexion au serveur
   int connect_status = connect(socketfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
   if (connect_status < 0)
   {
@@ -92,11 +132,13 @@ int main()
     exit(EXIT_FAILURE);
   }
 
+  // Boucle principale
   while (1)
   {
-    // appeler la fonction pour envoyer un message au serveur
     envoie_recois_message(socketfd);
   }
 
   close(socketfd);
+  return 0;
 }
+
