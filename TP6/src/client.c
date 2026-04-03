@@ -18,7 +18,7 @@
 
 #define MAX_COULEURS 30
 
-void analyse(char *pathname, char *data, int nb_couleurs)
+void construire_json_couleurs(char *pathname, char *data, int nb_couleurs)
 {
   couleur_compteur *cc = analyse_bmp_image(pathname);
 
@@ -28,9 +28,7 @@ void analyse(char *pathname, char *data, int nb_couleurs)
     exit(EXIT_FAILURE);
   }
 
-  int count;
   int nb = nb_couleurs;
-
   if (nb > MAX_COULEURS)
   {
     nb = MAX_COULEURS;
@@ -41,41 +39,44 @@ void analyse(char *pathname, char *data, int nb_couleurs)
     nb = cc->size;
   }
 
-  strcpy(data, "couleurs: ");
+  strcpy(data, "{\"code\":\"couleurs\",\"valeurs\":[");
 
-  char temp_string[32];
-  sprintf(temp_string, "%d,", nb);
-  strcat(data, temp_string);
+  char temp_string[64];
 
-  for (count = 1; count <= nb && cc->size - count >= 0; count++)
+  for (int count = 1; count <= nb && cc->size - count >= 0; count++)
   {
     if (cc->compte_bit == BITS32)
     {
-      sprintf(temp_string, "#%02x%02x%02x,",
+      sprintf(temp_string, "\"#%02x%02x%02x\"",
               cc->cc.cc32[cc->size - count].c.rouge,
               cc->cc.cc32[cc->size - count].c.vert,
               cc->cc.cc32[cc->size - count].c.bleu);
     }
-    else if (cc->compte_bit == BITS24)
+    else
     {
-      sprintf(temp_string, "#%02x%02x%02x,",
+      sprintf(temp_string, "\"#%02x%02x%02x\"",
               cc->cc.cc24[cc->size - count].c.rouge,
               cc->cc.cc24[cc->size - count].c.vert,
               cc->cc.cc24[cc->size - count].c.bleu);
     }
 
     strcat(data, temp_string);
+
+    if (count < nb)
+    {
+      strcat(data, ",");
+    }
   }
 
-  data[strlen(data) - 1] = '\0';
+  strcat(data, "]}");
 }
 
-int envoie_couleurs(int socketfd, char *pathname, int nb_couleurs)
+int envoie_couleurs_json(int socketfd, char *pathname, int nb_couleurs)
 {
-  char data[1024];
+  char data[2048];
   memset(data, 0, sizeof(data));
 
-  analyse(pathname, data, nb_couleurs);
+  construire_json_couleurs(pathname, data, nb_couleurs);
 
   int write_status = write(socketfd, data, strlen(data));
   if (write_status < 0)
@@ -84,28 +85,49 @@ int envoie_couleurs(int socketfd, char *pathname, int nb_couleurs)
     exit(EXIT_FAILURE);
   }
 
+  printf("JSON envoye : %s\n", data);
+  return 0;
+}
+
+int envoie_message_json(int socketfd)
+{
+  char saisie[512];
+  char data[1024];
+
+  memset(saisie, 0, sizeof(saisie));
+  memset(data, 0, sizeof(data));
+
+  printf("Votre message : ");
+  fgets(saisie, sizeof(saisie), stdin);
+
+  saisie[strcspn(saisie, "\n")] = '\0';
+
+  sprintf(data, "{\"code\":\"message\",\"valeurs\":[\"%s\"]}", saisie);
+
+  int write_status = write(socketfd, data, strlen(data));
+  if (write_status < 0)
+  {
+    perror("erreur ecriture");
+    exit(EXIT_FAILURE);
+  }
+
+  memset(data, 0, sizeof(data));
+
+  int read_status = read(socketfd, data, sizeof(data));
+  if (read_status < 0)
+  {
+    perror("erreur lecture");
+    return -1;
+  }
+
+  printf("Message recu : %s\n", data);
   return 0;
 }
 
 int main(int argc, char **argv)
 {
   int socketfd;
-  int nb_couleurs;
   struct sockaddr_in server_addr;
-
-  if (argc != 3)
-  {
-    printf("usage: ./client chemin_bmp_image nb_couleurs\n");
-    return EXIT_FAILURE;
-  }
-
-  nb_couleurs = atoi(argv[2]);
-
-  if (nb_couleurs <= 0 || nb_couleurs > MAX_COULEURS)
-  {
-    printf("Erreur: nb_couleurs doit etre entre 1 et %d\n", MAX_COULEURS);
-    return EXIT_FAILURE;
-  }
 
   socketfd = socket(AF_INET, SOCK_STREAM, 0);
   if (socketfd < 0)
@@ -126,7 +148,31 @@ int main(int argc, char **argv)
     exit(EXIT_FAILURE);
   }
 
-  envoie_couleurs(socketfd, argv[1], nb_couleurs);
+  if (argc == 1)
+  {
+    envoie_message_json(socketfd);
+  }
+  else if (argc == 3)
+  {
+    int nb_couleurs = atoi(argv[2]);
+
+    if (nb_couleurs <= 0 || nb_couleurs > MAX_COULEURS)
+    {
+      printf("Erreur: nb_couleurs doit etre entre 1 et %d\n", MAX_COULEURS);
+      close(socketfd);
+      return EXIT_FAILURE;
+    }
+
+    envoie_couleurs_json(socketfd, argv[1], nb_couleurs);
+  }
+  else
+  {
+    printf("usage:\n");
+    printf("  ./client\n");
+    printf("  ./client chemin_bmp_image nb_couleurs\n");
+    close(socketfd);
+    return EXIT_FAILURE;
+  }
 
   close(socketfd);
   return 0;
